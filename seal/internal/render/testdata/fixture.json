@@ -1,0 +1,20 @@
+{
+  "fontPath": "",
+  "transparency": "6",
+  "attribute": {
+    "dpi": 1000,
+    "sealSpec": "CIRCULAR_42",
+    "content": "XX测试科技有限公司",
+    "edgeWidth": 1.2,
+    "logoSize": 14,
+    "sealWidth": 42,
+    "fontSize": 7,
+    "wordLinePadding": 0.8,
+    "enterprisecodeFontSize": 2.2,
+    "sealLogo": true,
+    "antifakeGap": false,
+    "foot": "",
+    "enterpriseCode": "",
+    "innerContent": ""
+  }
+}
