@@ -6,17 +6,17 @@ import (
 	"fmt"
 	"image"
 
-	"github.com/bytodream/official-seal-open/seal/internal/draw/module/communist"
-	"github.com/bytodream/official-seal-open/seal/internal/draw/module/doublecir"
-	"github.com/bytodream/official-seal-open/seal/internal/draw/module/doublelinecircle"
-	"github.com/bytodream/official-seal-open/seal/internal/draw/module/doublelineoval"
+	//"github.com/bytodream/official-seal-open/seal/internal/draw/module/communist"
+	//"github.com/bytodream/official-seal-open/seal/internal/draw/module/doublecir"
+	//"github.com/bytodream/official-seal-open/seal/internal/draw/module/doublelinecircle"
+	//"github.com/bytodream/official-seal-open/seal/internal/draw/module/doublelineoval"
 	"github.com/bytodream/official-seal-open/seal/internal/draw/module/enterprise"
-	"github.com/bytodream/official-seal-open/seal/internal/draw/module/labour"
-	"github.com/bytodream/official-seal-open/seal/internal/draw/module/morefootcircle"
-	"github.com/bytodream/official-seal-open/seal/internal/draw/module/morefootoval"
-	"github.com/bytodream/official-seal-open/seal/internal/draw/module/morefootrectangle"
-	"github.com/bytodream/official-seal-open/seal/internal/draw/module/oval"
-	"github.com/bytodream/official-seal-open/seal/internal/draw/module/youthleague"
+	//"github.com/bytodream/official-seal-open/seal/internal/draw/module/labour"
+	//"github.com/bytodream/official-seal-open/seal/internal/draw/module/morefootcircle"
+	//"github.com/bytodream/official-seal-open/seal/internal/draw/module/morefootoval"
+	//"github.com/bytodream/official-seal-open/seal/internal/draw/module/morefootrectangle"
+	//"github.com/bytodream/official-seal-open/seal/internal/draw/module/oval"
+	//"github.com/bytodream/official-seal-open/seal/internal/draw/module/youthleague"
 	"github.com/bytodream/official-seal-open/seal/utils"
 
 	"github.com/bytodream/official-seal-open/seal/internal/draw/base"
@@ -25,17 +25,17 @@ import (
 )
 
 func init() {
-	communist.Register()
-	doublecir.Register()
-	doublelinecircle.Register()
-	doublelineoval.Register()
+	//communist.Register()
+	//doublecir.Register()
+	//doublelinecircle.Register()
+	//doublelineoval.Register()
 	enterprise.Register()
-	labour.Register()
-	morefootcircle.Register()
-	morefootoval.Register()
-	morefootrectangle.Register()
-	oval.Register()
-	youthleague.Register()
+	//labour.Register()
+	//morefootcircle.Register()
+	//morefootoval.Register()
+	//morefootrectangle.Register()
+	//oval.Register()
+	//youthleague.Register()
 }
 
 // SealPaintModel 章面绘制参数（像素级，由 base.SealPaintAttribute 转换而来）。
