@@ -1,3 +1,4 @@
+// Package seal 企业电子公章对外门面；集成方应只依赖本包 API。
 package seal
 
 import (
@@ -9,10 +10,10 @@ import (
 type (
 	// CompanySealCreateService 企业印章创建服务。
 	CompanySealCreateService = service.CompanySealCreateService
-	// ElectronicAbstractSealCreateService 电子印章创建服务的公共依赖。
-	ElectronicAbstractSealCreateService = service.ElectronicAbstractSealCreateService
 	// ImageService 图像服务接口。
 	ImageService = service.ImageService
+	// ImageServiceConfigurator 图像服务的可选配置能力。
+	ImageServiceConfigurator = service.ImageServiceConfigurator
 	// WatermarkFunc 章面水印回调函数类型。
 	WatermarkFunc = service.WatermarkFunc
 	// License 授权信息。
@@ -136,8 +137,8 @@ const (
 )
 
 // NewCompanySealCreateService 基于给定的电子印章创建服务构造企业印章创建服务。
-func NewCompanySealCreateService(base ElectronicAbstractSealCreateService) *CompanySealCreateService {
-	return service.NewCompanySealCreateService(base)
+func NewCompanySealCreateService() *CompanySealCreateService {
+	return service.NewCompanySealCreateService()
 }
 
 // NewCustomSealAttribute 创建带默认开关与 DPI 的 CustomSealAttribute 实例。

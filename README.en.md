@@ -4,7 +4,7 @@
 
 Integrators should depend only on the public **`seal`** package. Drawing and rendering live under `internal/` and are not importable from outside this module tree.
 
-- Module: `github.com/bytodream/official-seal-open`
+- Module: `github.com/bytodream/official-seal`
 - Go: 1.25+
 
 ---
@@ -44,11 +44,27 @@ _ = seal.SetLicenseKey(os.Getenv("OS_LICENSE"))
 
 License and seal **category** checks run in the service layer only. The renderer is fixed to `CommonSealGenerator` (no pluggable generator).
 
+`GetAutoSealImage` needs an `ImageService` (transcode + upload). A `service.DefaultImageService` is wired in by default; it covers transcoding and matches Java `ImageServiceImpl.toImageBytes` (transparency → zoom → rotate → PNG encoding). Upload still needs your own storage — embed it to reuse the transcoding:
+
+```go
+type myImageService struct{ service.DefaultImageService }
+
+func (myImageService) UploadBytes(data []byte, attr dto.ImageAttr, companySeal bool) (string, error) {
+    return myStorage.Upload(data, "image/png"), nil
+}
+
+// The embedded type has pointer receivers, so take its address when assigning.
+svc := service.NewCompanySealCreateService().SetImageService(&myImageService{})
+```
+
+`Transparent`, `Zoom`, `Rotate`, `LimitWidth`, `LimitHeight` and `Degree` on `ImageAttr` are consumed by the default implementation; after an explicit `SetImageService(nil)` they no longer take effect.
+
 ### Integration notes
 
 - Import **`github.com/bytodream/official-seal-open/seal`** only; use exported `SealModel`, `CustomSealAttribute`, etc. Do not import `seal/model` or `seal/internal` (`seal/utils` is a public utility package).
 - Use **`ParseSealModelFromCreateJSON`** for create-seal JSON, then `Preview`.
 - **`ToSealAttributeFunc`** is not supported on the service-layer attribute (JSON bridge only); build fields before calling the API.
+- Service construction is now argument-free with chained setters: replace `NewCompanySealCreateService(base)` with `NewCompanySealCreateService().SetFontPath(p).SetImageService(s)`. The shared dependency type `ElectronicAbstractSealCreateService` is no longer exported.
 
 ---
 
@@ -266,7 +282,7 @@ See [LICENSE](LICENSE) (Apache 2.0). Commercial categories and features are gove
 
 ## 💌 Support the Author
 
-If you find this project useful or are already using it, please consider giving it a ⭐ Star on <a target="_blank" href="https://github.com/bytodream/official-seal-open">GitHub</a> — it would be a great encouragement!
+If you find this project useful or are already using it, please consider giving it a ⭐ Star on <a target="_blank" href="https://github.com/bytodream/official-seal">GitHub</a> — it would be a great encouragement!
 
 > A cup of coffee ☕️ or milk tea 🧋 keeps the author energized and coding better!
 

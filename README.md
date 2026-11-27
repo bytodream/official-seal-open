@@ -2,7 +2,7 @@
 
 **official-seal** 是一个用 Go 编写的**企业电子公章章面生成库**。根据章型、规格与文案参数，在本地光栅化生成透明 PNG 章面，适用于电子签章、合同预览、印章制作等场景。集成方只需依赖 `seal` 包对外 API；绘制与渲染实现位于 `internal` 子包，不对外暴露。
 
-- 模块路径：`github.com/bytodream/official-seal-open`
+- 模块路径：`github.com/bytodream/official-seal`
 - 语言要求：Go 1.25+
 
 ---
@@ -42,11 +42,27 @@ _ = seal.SetLicenseKey(os.Getenv("OS_LICENSE"))
 
 章面生成前在**服务层**统一做许可证与章型校验；生成器固定为 `CommonSealGenerator`，不可注入自定义实现。
 
+`GetAutoSealImage` 需要 `ImageService`（转码 + 上传）。库默认装配 `service.DefaultImageService`，它实现转码部分，行为对齐 Java `ImageServiceImpl.toImageBytes`（透明化 → 缩放 → 旋转 → PNG 编码）；上传需自行接入存储，内嵌即可复用转码：
+
+```go
+type myImageService struct{ service.DefaultImageService }
+
+func (myImageService) UploadBytes(data []byte, attr dto.ImageAttr, companySeal bool) (string, error) {
+    return myStorage.Upload(data, "image/png"), nil
+}
+
+// 内嵌类型的方法都是指针接收者，赋值时须取地址
+svc := service.NewCompanySealCreateService().SetImageService(&myImageService{})
+```
+
+`ImageAttr` 的 `Transparent`、`Zoom`、`Rotate`、`LimitWidth`、`LimitHeight`、`Degree` 由默认实现消费；显式 `SetImageService(nil)` 后这些字段不再生效。
+
 ### 集成约定
 
 - 请 **`import "github.com/bytodream/official-seal-open/seal"`**，类型使用本包导出的 `SealModel`、`CustomSealAttribute` 等；勿直接依赖 `seal/model`、`seal/internal`（`seal/utils` 为公开工具包）。
 - 前端创建印章 JSON 可经 **`ParseSealModelFromCreateJSON`** 转为 `SealModel` 后调用 `Preview`。
 - 服务层 `CustomSealAttribute` 经 JSON 转换进入内核，**不支持** `ToSealAttributeFunc` 回调；复杂映射请在业务侧组装好字段后再调用 API。
+- 服务构造改为无参 + 链式 `Set`：由 `NewCompanySealCreateService(base)` 改为 `NewCompanySealCreateService().SetFontPath(p).SetImageService(s)`；公共依赖类型 `ElectronicAbstractSealCreateService` 不再导出。
 
 ---
 
@@ -264,7 +280,7 @@ export OS_LICENSE='AgEAy7qZ7+eVbLwP0H7HR0MUd9IppoSqwvSgdr6IWTD8yzN5gesf5PgNMi4zk
 
 ## 💌 支持作者
 
-如果觉得项目不错，或者已经在使用了，希望你可以去 <a target="_blank" href="https://github.com/bytodream/official-seal-open">Github</a> 帮我点个 ⭐ Star，这将是对我极大的鼓励与支持。
+如果觉得项目不错，或者已经在使用了，希望你可以去 <a target="_blank" href="https://github.com/bytodream/official-seal">Github</a> 帮我点个 ⭐ Star，这将是对我极大的鼓励与支持。
 
 > 喝杯咖啡 ☕️ 或者来杯奶茶 🧋，让作者更有精神，写出更棒的代码！
 

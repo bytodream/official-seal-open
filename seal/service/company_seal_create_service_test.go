@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/bytodream/official-seal-open/seal/internal/render"
 	"github.com/bytodream/official-seal-open/seal/service/dto"
 )
 
@@ -64,22 +63,8 @@ func testFontPathOrSkip(t *testing.T) string {
 	return os.Getenv("OFFICIAL_SEAL_FONTS_PATH")
 }
 
-type stubImageService struct{}
-
-func (stubImageService) ToImageBytes(img dto.RasterImage, _ dto.ImageAttr) ([]byte, error) {
-	return render.PNGBytes(img)
-}
-
-func (stubImageService) UploadBytes(_ []byte, _ dto.ImageAttr, _ bool) (string, error) {
-	return "image-key", nil
-}
-
-func (stubImageService) UploadRasterImage(_ dto.RasterImage, _ dto.ImageAttr, _ bool) (string, error) {
-	return "blur-key", nil
-}
-
 func TestCompanySealCreateService_IsSupport(t *testing.T) {
-	svc := NewCompanySealCreateService(ElectronicAbstractSealCreateService{})
+	svc := NewCompanySealCreateService()
 	if !svc.IsSupport(dto.SealTypeCompany, dto.BusinessTypeElectronic) {
 		t.Fatal("expected support company electronic seal")
 	}
@@ -91,7 +76,7 @@ func TestCompanySealCreateService_IsSupport(t *testing.T) {
 func TestCompanySealCreateService_GenerateImageDefaults(t *testing.T) {
 	skipIfNoLicense(t)
 	fontPath := testFontPathOrSkip(t)
-	svc := NewCompanySealCreateService(ElectronicAbstractSealCreateService{FontPath: fontPath})
+	svc := NewCompanySealCreateService().SetFontPath(fontPath)
 	attr := &dto.CustomSealAttribute{Content: "XX测试科技有限公司"}
 	domainSeal, err := (&dto.Seal{}).ToDomain()
 	if err != nil {
@@ -122,10 +107,7 @@ func TestCompanySealCreateService_GenerateImageDefaults(t *testing.T) {
 func TestCompanySealCreateService_GetAutoSealImage(t *testing.T) {
 	skipIfNoLicense(t)
 	fontPath := testFontPathOrSkip(t)
-	svc := NewCompanySealCreateService(ElectronicAbstractSealCreateService{
-		FontPath:     fontPath,
-		ImageService: stubImageService{},
-	})
+	svc := NewCompanySealCreateService().SetFontPath(fontPath)
 	attr := &dto.CustomSealAttribute{Content: "XX测试科技有限公司"}
 	img, err := svc.GetAutoSealImage(&dto.Seal{}, attr)
 	if err != nil {

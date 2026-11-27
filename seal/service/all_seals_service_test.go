@@ -37,10 +37,7 @@ func serviceTestFontPath(t *testing.T) string {
 
 // newRenderSealService 构造使用真实 CommonSealGenerator 的公司章服务。
 func newRenderSealService(fontPath string) *CompanySealCreateService {
-	return NewCompanySealCreateService(ElectronicAbstractSealCreateService{
-		FontPath:     fontPath,
-		ImageService: stubImageService{},
-	})
+	return NewCompanySealCreateService().SetFontPath(fontPath)
 }
 
 // serviceSealCase 单个章型的服务层用例（SealModel 与章面参数全部显式构造）。

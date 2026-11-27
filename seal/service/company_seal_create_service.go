@@ -1,3 +1,4 @@
+// Package service 电子公章服务实现；对外 API 实体见 service/dto，集成方可 import 顶层 seal 门面。
 package service
 
 import (
@@ -9,12 +10,79 @@ import (
 
 // CompanySealCreateService 企业电子公章的生成与预览服务。
 type CompanySealCreateService struct {
-	ElectronicAbstractSealCreateService
+	*electronicAbstractSealCreateService
 }
 
 // NewCompanySealCreateService 基于公共依赖创建企业电子公章服务。
-func NewCompanySealCreateService(base ElectronicAbstractSealCreateService) *CompanySealCreateService {
-	return &CompanySealCreateService{ElectronicAbstractSealCreateService: base}
+func NewCompanySealCreateService() *CompanySealCreateService {
+	return &CompanySealCreateService{
+		electronicAbstractSealCreateService: newElectronicAbstractSealCreateService(),
+	}
+}
+
+func (e *CompanySealCreateService) SetFontPath(fontPath string) *CompanySealCreateService {
+	e.FontPath = fontPath
+	return e
+}
+
+func (e *CompanySealCreateService) SetImageService(imageService ImageService) *CompanySealCreateService {
+	e.ImageService = imageService
+	return e
+}
+
+// configurableImageService 返回可配置的图片服务：未注入时补默认实现，
+// 已注入但未实现 ImageServiceConfigurator 时返回 nil，因此配置项不会生效。
+func (e *CompanySealCreateService) configurableImageService() ImageServiceConfigurator {
+	if e.ImageService == nil {
+		e.ImageService = newDefaultImageService()
+	}
+	c, _ := e.ImageService.(ImageServiceConfigurator)
+	return c
+}
+
+func (e *CompanySealCreateService) SetToImageBytes(toImageBytes ToImageBytes) *CompanySealCreateService {
+	if c := e.configurableImageService(); c != nil {
+		c.SetToImageBytes(toImageBytes)
+	}
+	return e
+}
+
+func (e *CompanySealCreateService) SetUploadBytes(uploadBytes UploadBytes) *CompanySealCreateService {
+	if c := e.configurableImageService(); c != nil {
+		c.SetUploadBytes(uploadBytes)
+	}
+	return e
+}
+
+func (e *CompanySealCreateService) SetUploadRasterImage(uploadRasterImage UploadRasterImage) *CompanySealCreateService {
+	if c := e.configurableImageService(); c != nil {
+		c.SetUploadRasterImage(uploadRasterImage)
+	}
+	return e
+}
+
+func (e *CompanySealCreateService) SetWatermarkFunc(watermark WatermarkFunc) *CompanySealCreateService {
+	e.Watermark = watermark
+	return e
+}
+
+// GetAutoSealImageBySeal 生成清晰/模糊章面并经 ImageService 上传，返回各 fileKey 与主图大小。
+func (s *CompanySealCreateService) GetAutoSealImageBySeal(seal *dto.Seal) (*dto.SealImage, error) {
+	return s.GetAutoSealImage(seal, dto.NewCustomSealAttribute())
+}
+
+// GetAutoSealImageByCustomSealAttribute 生成清晰/模糊章面并经 ImageService 上传，返回各 fileKey 与主图大小。
+func (s *CompanySealCreateService) GetAutoSealImageByCustomSealAttribute(attribute *dto.CustomSealAttribute) (*dto.SealImage, error) {
+	radius := 10
+	seal := &dto.Seal{Radius: &radius}
+	return s.GetAutoSealImage(seal, attribute)
+}
+
+// GetAutoSealImageByDefault 生成清晰/模糊章面并经 ImageService 上传，返回各 fileKey 与主图大小。
+func (s *CompanySealCreateService) GetAutoSealImageByDefault() (*dto.SealImage, error) {
+	radius := 10
+	seal := &dto.Seal{Radius: &radius}
+	return s.GetAutoSealImage(seal, dto.NewCustomSealAttribute())
 }
 
 // GetAutoSealImage 生成清晰/模糊章面并经 ImageService 上传，返回各 fileKey 与主图大小。
@@ -142,6 +210,6 @@ func (s *CompanySealCreateService) IsSupport(typ dto.SealType, category dto.Busi
 	return typ == dto.SealTypeCompany && category == dto.BusinessTypeElectronic
 }
 
-func (s *ElectronicAbstractSealCreateService) commonSealGenerator() *render.CommonSealGenerator {
+func (s *CompanySealCreateService) commonSealGenerator() *render.CommonSealGenerator {
 	return &render.CommonSealGenerator{FontPath: s.FontPath}
 }
