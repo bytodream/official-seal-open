@@ -95,17 +95,15 @@ func (key *License) Validate() error {
 	if ReleasedAt.After(key.CreatedAt) {
 		return fmt.Errorf("invalid license: Created At is invalid")
 	}
-	if key.ExpiresAt == nil {
-		expiresAt := key.CreatedAt.AddDate(1, 0, 0)
-		if ReleasedAt.After(expiresAt) {
-			expiresAt = ReleasedAt
-		}
-		key.ExpiresAt = &expiresAt
-	}
 	if key.ExpiresAtInt < 0 || key.UsageLimit < 0 {
 		return fmt.Errorf("invalid license: Expires At / Usage Limit cannot be negative")
 	}
-	if key.CreatedAt.After(*key.ExpiresAt) {
+	// ExpiresAtInt == 0 表示永不过期，ExpiresAt 保持 nil；仅显式给正值时才解析。
+	if key.ExpiresAtInt > 0 && key.ExpiresAt == nil {
+		expiresAt := time.Unix(key.ExpiresAtInt, 0)
+		key.ExpiresAt = &expiresAt
+	}
+	if key.ExpiresAt != nil && key.CreatedAt.After(*key.ExpiresAt) {
 		return fmt.Errorf("invalid license: Created At cannot be Greater than Expires At")
 	}
 	if key.isExpired() {

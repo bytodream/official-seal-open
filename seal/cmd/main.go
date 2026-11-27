@@ -91,6 +91,15 @@ func resolveOutDir(flagOut string, single bool) string {
 	return filepath.Join(root, "docs", "images", "seals")
 }
 
+// safeOutputName 只保留文件名最后一段，避免 -name 携带路径跳出输出目录。
+func safeOutputName(name string) string {
+	name = filepath.Base(strings.TrimSpace(name))
+	if name == "." || name == ".." || name == string(filepath.Separator) {
+		return ""
+	}
+	return name
+}
+
 // renderSingle 渲染单个章面数据。source 仅用于错误提示（文件路径或 -attr-text）。
 func renderSingle(data []byte, source, name, flagOut, flagFont string) {
 	attr, fixtureFont, transparency, err := loadAttribute(data)
@@ -115,6 +124,7 @@ func renderSingle(data []byte, source, name, flagOut, flagFont string) {
 		fatalf("%s: %v", source, err)
 	}
 
+	name = safeOutputName(name)
 	if name == "" {
 		name = "seal"
 	}
