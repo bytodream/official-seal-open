@@ -8,29 +8,29 @@ import (
 	"strconv"
 	"strings"
 
-	xdraw "golang.org/x/image/draw"
-
 	"github.com/bytodream/official-seal-open/seal/internal/render"
 	"github.com/bytodream/official-seal-open/seal/service/dto"
+	xdraw "golang.org/x/image/draw"
 )
 
 // DefaultImageService 提供章面位图的转码实现，处理顺序对齐 Java
 // ImageServiceImpl.toImageBytes：透明化 → 缩放 → 旋转 → PNG 编码。
 //
-// 它不涉及对象存储，因此 UploadBytes / UploadRasterImage 返回
-// dto.ErrImageUploadNotConfigured。需要上传能力时内嵌本类型并覆盖这两个方法：
+// 它不涉及对象存储，未注入上传函数时 HasUploadBytes 返回 false、
+// UploadBytes 返回 dto.ErrImageUploadNotConfigured。接入自有存储的推荐方式：
 //
-//	type myImageService struct{ service.DefaultImageService }
-//
-//	func (myImageService) UploadBytes(data []byte, attr dto.ImageAttr, companySeal bool) (string, error) {
+//	svc := service.NewCompanySealCreateService()
+//	svc.SetUploadBytes(func(data []byte, attr dto.ImageAttr, companySeal bool) (string, error) {
 //		return myStorage.Upload(data, "image/png"), nil
-//	}
+//	})
+//
+// 也可内嵌本类型并覆盖 UploadBytes，但必须同时覆盖 HasUploadBytes 返回 true，
+// 否则 GetAutoSealImage 会在渲染前拒绝上传。
 //
 // 本类型的方法都是指针接收者，赋值时须取地址：svc.SetImageService(&myImageService{})。
 type DefaultImageService struct {
-	toImageBytes      ToImageBytes
-	uploadBytes       UploadBytes
-	uploadRasterImage UploadRasterImage
+	uploadBytes    UploadBytes
+	isBlurGenerate bool
 }
 
 var (
@@ -38,30 +38,26 @@ var (
 	_ ImageServiceConfigurator = &DefaultImageService{}
 )
 
-func newDefaultImageService() ImageService {
+func newDefaultImageService() *DefaultImageService {
 	return &DefaultImageService{}
-}
-
-func (s *DefaultImageService) SetToImageBytes(toImageBytes ToImageBytes) {
-	s.toImageBytes = toImageBytes
 }
 
 func (s *DefaultImageService) SetUploadBytes(uploadBytes UploadBytes) {
 	s.uploadBytes = uploadBytes
 }
 
-func (s *DefaultImageService) SetUploadRasterImage(uploadRasterImage UploadRasterImage) {
-	s.uploadRasterImage = uploadRasterImage
+func (s *DefaultImageService) SetBlurGenerate(isBlurGenerate bool) {
+	s.isBlurGenerate = isBlurGenerate
+}
+
+func (s *DefaultImageService) IsBlurGenerate() bool {
+	return s.isBlurGenerate
 }
 
 // ToImageBytes 按 ImageAttr 对章面位图做后处理并编码为 PNG。
 //
-// 与渲染阶段的透明度处理不同：这里对应 Java 的 translucentSeal（掩码 + SrcIn），
 // 透明度字符串缺省为 "30"、换算按 (100-t)*2.55 截断取整，非法输入直接报错而非静默回退。
-func (s *DefaultImageService) ToImageBytes(img dto.RasterImage, attr dto.ImageAttr) ([]byte, error) {
-	if s.toImageBytes != nil {
-		return s.toImageBytes(img, attr)
-	}
+func (s *DefaultImageService) ToImageBytes(img image.Image, attr dto.ImageAttr) ([]byte, error) {
 	if img == nil {
 		return nil, fmt.Errorf("章面位图为空")
 	}
@@ -97,18 +93,16 @@ func (s *DefaultImageService) ToImageBytes(img dto.RasterImage, attr dto.ImageAt
 	return render.PNGBytes(out)
 }
 
-func (s *DefaultImageService) UploadBytes(bytes []byte, attr dto.ImageAttr, companySeal bool) (string, error) {
-	if s.uploadBytes != nil {
-		return s.uploadBytes(bytes, attr, companySeal)
-	}
-	return "", dto.ErrImageUploadNotConfigured
+func (s *DefaultImageService) HasUploadBytes() bool {
+	return s.uploadBytes != nil
 }
 
-func (s *DefaultImageService) UploadRasterImage(image dto.RasterImage, attr dto.ImageAttr, companySeal bool) (string, error) {
-	if s.uploadRasterImage != nil {
-		return s.uploadRasterImage(image, attr, companySeal)
+// UploadBytes 调用注入的上传函数；未注入时返回 dto.ErrImageUploadNotConfigured。
+func (s *DefaultImageService) UploadBytes(data []byte, attr dto.ImageAttr, companySeal bool) (string, error) {
+	if s.uploadBytes == nil {
+		return "", dto.ErrImageUploadNotConfigured
 	}
-	return "", dto.ErrImageUploadNotConfigured
+	return s.uploadBytes(data, attr, companySeal)
 }
 
 // transparencyAlpha 把 0–100 的透明度字符串换算为 Alpha。

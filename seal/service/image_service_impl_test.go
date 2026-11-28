@@ -234,9 +234,6 @@ func TestDefaultImageServiceUploadNotConfigured(t *testing.T) {
 	if _, err := svc.UploadBytes([]byte{1}, dto.ImageAttr{}, true); err != dto.ErrImageUploadNotConfigured {
 		t.Fatalf("UploadBytes err = %v, want ErrImageUploadNotConfigured", err)
 	}
-	if _, err := svc.UploadRasterImage(nil, dto.ImageAttr{}, true); err != dto.ErrImageUploadNotConfigured {
-		t.Fatalf("UploadRasterImage err = %v, want ErrImageUploadNotConfigured", err)
-	}
 }
 
 // TestToImageBytesZoomSingleSideZero 单边限制为 0 时按另一边比例推算，
@@ -266,26 +263,5 @@ func TestToImageBytesZoomSingleSideZero(t *testing.T) {
 				t.Fatalf("尺寸 = %dx%d, want %dx%d", b.Dx(), b.Dy(), c.wantW, c.wantH)
 			}
 		})
-	}
-}
-
-// TestSetImageServiceNilKeepsConfig 置空图片服务后再配置转码函数应补默认实现，
-// 而不是静默丢弃配置。
-func TestSetImageServiceNilKeepsConfig(t *testing.T) {
-	svc := NewCompanySealCreateService().SetImageService(nil)
-	called := false
-	svc.SetToImageBytes(func(dto.RasterImage, dto.ImageAttr) ([]byte, error) {
-		called = true
-		return []byte("custom"), nil
-	})
-	if svc.ImageService == nil {
-		t.Fatal("SetToImageBytes 后 ImageService 仍为 nil，配置被丢弃")
-	}
-	got, err := svc.ImageService.ToImageBytes(nil, dto.ImageAttr{})
-	if err != nil {
-		t.Fatalf("注入的转码返回错误: %v", err)
-	}
-	if !called || string(got) != "custom" {
-		t.Fatalf("注入的转码未被调用：called = %v, got = %q", called, got)
 	}
 }

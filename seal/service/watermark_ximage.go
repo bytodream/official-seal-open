@@ -6,11 +6,9 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"os"
 
 	"github.com/bytodream/official-seal-open/seal/internal/render"
-	"github.com/bytodream/official-seal-open/seal/service/dto"
-
-	"os"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
@@ -19,7 +17,7 @@ import (
 )
 
 // DefaultWatermark 为 WatermarkFunc 的默认实现（build tag: watermark）。
-func DefaultWatermark(img dto.RasterImage, c color.Color, content string, size, degree int, fontFile string) error {
+func DefaultWatermark(img image.Image, c color.Color, content string, size, degree int, fontFile string) error {
 	rgba := render.AsRGBA(img)
 	face, err := loadFontFace(fontFile, float64(size))
 	if err != nil {

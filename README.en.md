@@ -39,30 +39,31 @@ _ = seal.SetLicenseKey(os.Getenv("OS_LICENSE"))
 | `SetLicenseKey` / `GetLicenseKey` | Load and inspect license |
 | `CompanySealCreateService.Preview` | Preview PNG from `SealModel` |
 | `CompanySealCreateService.GetAutoSealImage` | Sharp + blurred images and upload keys |
+| `CompanySealCreateService.SetImageService` / `SetUploadBytes` / `SetBlurGenerate` | Inject image service, uploader and blur switch |
 | `CompanySealCreateService.RenderAttributePNG` | PNG from `CustomSealAttribute` |
 | `CompanySealCreateService.InitSealPermission` | Verify license is active |
 
-License and seal **category** checks run in the service layer only. The renderer is fixed to `CommonSealGenerator` (no pluggable generator).
+The service layer validates license validity (`InitSealPermission`); category permission and usage counting happen in the drawing layer (`internal/draw`). The renderer is fixed to `CommonSealGenerator` (no pluggable generator).
 
-`GetAutoSealImage` needs an `ImageService` (transcode + upload). A `service.DefaultImageService` is wired in by default; it covers transcoding and matches Java `ImageServiceImpl.toImageBytes` (transparency → zoom → rotate → PNG encoding). Upload still needs your own storage — embed it to reuse the transcoding:
+`GetAutoSealImage` needs an `ImageService` (transcode + upload). A `service.DefaultImageService` is wired in by default; it covers transcoding and matches Java `ImageServiceImpl.toImageBytes` (transparency → zoom → rotate → PNG encoding). Upload is plugged in via `SetUploadBytes`:
 
 ```go
-type myImageService struct{ service.DefaultImageService }
-
-func (myImageService) UploadBytes(data []byte, attr dto.ImageAttr, companySeal bool) (string, error) {
+svc := seal.NewCompanySealCreateService().SetFontPath(fontPath)
+svc.SetUploadBytes(func(data []byte, attr seal.ImageAttr, companySeal bool) (string, error) {
     return myStorage.Upload(data, "image/png"), nil
-}
-
-// The embedded type has pointer receivers, so take its address when assigning.
-svc := service.NewCompanySealCreateService().SetImageService(&myImageService{})
+})
+// Enable blurred seal generation when needed
+svc.SetBlurGenerate(true)
 ```
+
+You can also implement `seal.ImageService` yourself. `SetUploadBytes` / `SetBlurGenerate` come from the optional `seal.ImageServiceConfigurator`: implementations that skip it have both setters silently ignored, `HasUploadBytes` always reports false, and `GetAutoSealImage` returns `ErrImageUploadNotConfigured` before rendering.
 
 `Transparent`, `Zoom`, `Rotate`, `LimitWidth`, `LimitHeight` and `Degree` on `ImageAttr` are consumed by the default implementation; after an explicit `SetImageService(nil)` they no longer take effect.
 
 ### Integration notes
 
 - Import **`github.com/bytodream/official-seal-open/seal`** only; use exported `SealModel`, `CustomSealAttribute`, etc. Do not import `seal/model` or `seal/internal` (`seal/utils` is a public utility package).
-- Use **`ParseSealModelFromCreateJSON`** for create-seal JSON, then `Preview`.
+- Unmarshal create-seal JSON directly into `seal.SealModel` (fields and JSON tags live in `seal/service/dto`), then call `Preview`.
 - **`ToSealAttributeFunc`** is not supported on the service-layer attribute (JSON bridge only); build fields before calling the API.
 - Service construction is now argument-free with chained setters: replace `NewCompanySealCreateService(base)` with `NewCompanySealCreateService().SetFontPath(p).SetImageService(s)`. The shared dependency type `ElectronicAbstractSealCreateService` is no longer exported.
 
@@ -73,12 +74,11 @@ svc := service.NewCompanySealCreateService().SetImageService(&myImageService{})
 ```
 seal/                 Public facade (aliases service)
 ├── alias.go          Facade aliases: types, errors, spec constants
-├── doc.go            Package doc
 ├── cmd/              Helper commands (e.g. showcase generation)
 ├── service/          Services + license
 │   └── dto/          Integration DTOs; ToDomain → kernel model
 ├── model/            Kernel domain types
-├── utils/            Shared utilities (pixel conversion, logging, license, IoC)
+├── utils/            Shared utilities (license & usage, logging, unit conversion, crypto, IoC/collections/reflection)
 └── internal/         Internal implementation
     ├── draw/         Seal painting (base shared layer + self-contained per-category modules)
     ├── render/       PNG rendering and image effects
@@ -154,7 +154,7 @@ All categories defined in code. Previews above cover the mainstream common layou
 | Spec | Meaning |
 |------|---------|
 | `CIRCULAR_42` | 42 mm diameter circle (default) |
-| `CIRCULAR_34` | 34 mm diameter circle |
+| `CIRCULAR_34` | 34 mm diameter circle (enterprise module only; not an exported constant) |
 | `CIRCULAR_50` | 50 mm diameter circle (often used with multi-row circle) |
 | `OVAL_45_30` | 45×30 mm oval |
 | `OVAL_45_30_32_18` | Double-line oval composite spec |
@@ -212,7 +212,7 @@ CGO_ENABLED=0 go build -trimpath \
 | `-out` | Output directory; batch mode defaults to `<repo root>/docs/images/seals`, single-seal mode to the current directory |
 | `-attr` | JSON file with custom seal data; omit it to render the 13 built-in samples |
 | `-attr-text` / `-attrText` | Custom seal data as an inline JSON string; mutually exclusive with `-attr` |
-| `-name` | Output file name (without extension) in single-seal mode; defaults to the `-attr` file base name |
+| `-name` | Output file name (without extension) in single-seal mode; defaults to the `-attr` file base name, or `seal` for `-attr-text` |
 | `-seed` | Random seed; non-zero makes anti-fake lines and blur reproducible |
 | `-license` / `-license-file` | License payload or file; `OS_LICENSE` works as well |
 | `-font` | Font path; falls back to `fixture.fontPath`, `OFFICIAL_SEAL_FONTS_PATH` or the embedded font |
@@ -253,7 +253,7 @@ Defaults: missing `sealSpec` falls back to `CIRCULAR_42`, missing `sealCategory`
 ## Licensing
 
 - Set **`OS_LICENSE`** to a HybridSeal payload (auto-loaded on startup). Alias: `OFFICIAL_SEAL_LICENSE`.
-- **Tiers** `community`, `individual`, `business` map to different default allowed categories; JSON field **`seal_categories`** can explicitly restrict the list.
+- **Tiers** `community`, `individual`, `business` only describe the license type and never imply default categories; allowed categories come solely from the JSON field **`seal_categories`** (none if unset).
 - Service calls fail with `ErrLicenseRequired`, `ErrSealCategoryNotLicensed`, etc. when not allowed.
 
 ### Community license (works out of the box)

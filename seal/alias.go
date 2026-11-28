@@ -44,8 +44,6 @@ type (
 	DiySpec = dto.DiySpec
 	// ImageAttr 图像上传属性。
 	ImageAttr = dto.ImageAttr
-	// RasterImage 章面位图（image.Image 类型别名）。
-	RasterImage = dto.RasterImage
 )
 
 // 授权与错误相关的导出函数/变量。
@@ -72,6 +70,8 @@ var (
 	ErrSealCategoryNotSupported = dto.ErrSealCategoryNotSupported
 	// ErrImageServiceNotConfigured 章面图片服务未注入，无法上传生成的位图。
 	ErrImageServiceNotConfigured = dto.ErrImageServiceNotConfigured
+	// ErrImageUploadNotConfigured 章面图上传实现未配置。
+	ErrImageUploadNotConfigured = dto.ErrImageUploadNotConfigured
 )
 
 // 印章类型、业务类型与各章型规格/品类的导出常量（语义同 dto 包原常量）。

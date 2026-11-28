@@ -1,8 +1,6 @@
 package render
 
 import (
-	"github.com/bytodream/official-seal-open/seal/model"
-
 	"bytes"
 	"image"
 	"image/color"
@@ -15,7 +13,7 @@ import (
 const maxPaletteColors = 256
 
 // PNGBytes 将章面位图编码为 PNG 字节；颜色数不超过 256 时优先走调色板以减小体积。
-func PNGBytes(img model.RasterImage) ([]byte, error) {
+func PNGBytes(img image.Image) ([]byte, error) {
 	var buf bytes.Buffer
 	if paletted, ok := toPaletted(img, maxPaletteColors); ok {
 		if err := png.Encode(&buf, paletted); err == nil {
@@ -32,7 +30,7 @@ func PNGBytes(img model.RasterImage) ([]byte, error) {
 
 // toPaletted 在颜色数不超过 maxColors 时把图像转成 8 位调色板图。
 // 返回 false 表示颜色过多，调用方应回退到通用编码。
-func toPaletted(img model.RasterImage, maxColors int) (*image.Paletted, bool) {
+func toPaletted(img image.Image, maxColors int) (*image.Paletted, bool) {
 	b := img.Bounds()
 	if b.Dx() < 1 || b.Dy() < 1 {
 		return nil, false
@@ -113,7 +111,7 @@ func unpremultiply(r, g, b, a uint8) color.NRGBA {
 }
 
 // AsRGBA 将任意图像转为可绘制的 *image.RGBA
-func AsRGBA(img model.RasterImage) *image.RGBA {
+func AsRGBA(img image.Image) *image.RGBA {
 	if rgba, ok := img.(*image.RGBA); ok {
 		return rgba
 	}
@@ -158,7 +156,7 @@ func palettedToRGBA(p *image.Paletted) *image.RGBA {
 // AsNRGBA 将任意图像转为非预乘的 *image.NRGBA。
 // 与 PNG 的存储语义一致，转换完全无损 —— 调色板颜色本身就是 color.NRGBA
 // 直接查表拷贝字节即可。
-func AsNRGBA(img model.RasterImage) *image.NRGBA {
+func AsNRGBA(img image.Image) *image.NRGBA {
 	if n, ok := img.(*image.NRGBA); ok {
 		return n
 	}

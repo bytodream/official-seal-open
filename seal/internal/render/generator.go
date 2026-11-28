@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"image"
 	"os"
 
 	"github.com/bytodream/official-seal-open/seal/internal/draw"
@@ -16,7 +17,7 @@ type CommonSealGenerator struct {
 
 // GenerateImage 由 seal.CompanySealCreateService 调用；章型权限与使用次数由 Draw 层负责。
 // opts 透传给绘制模型构建（如 draw.WithSampleWatermark 用于预览样章）。
-func (g *CommonSealGenerator) GenerateImage(seal *model.Seal, attribute *model.CustomSealAttribute, opts ...draw.PaintOption) (model.RasterImage, error) {
+func (g *CommonSealGenerator) GenerateImage(seal *model.Seal, attribute *model.CustomSealAttribute, opts ...draw.PaintOption) (image.Image, error) {
 	if attribute == nil {
 		return nil, model.ErrSealAttributeNotConfigured
 	}

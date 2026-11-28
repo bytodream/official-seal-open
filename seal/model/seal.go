@@ -1,7 +1,5 @@
 package model
 
-import "image"
-
 // SealType 印章类型枚举。
 type SealType string
 
@@ -186,6 +184,3 @@ func (m *SealModel) ToSeal() *Seal {
 	}
 	return s
 }
-
-// RasterImage 章面位图（image.Image 类型别名）。
-type RasterImage = image.Image

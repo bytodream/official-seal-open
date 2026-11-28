@@ -37,30 +37,31 @@ _ = seal.SetLicenseKey(os.Getenv("OS_LICENSE"))
 | `SetLicenseKey` / `GetLicenseKey` | 加载与查询许可证 |
 | `CompanySealCreateService.Preview` | 按 `SealModel` 生成预览 PNG |
 | `CompanySealCreateService.GetAutoSealImage` | 生成清晰/模糊图并上传 |
+| `CompanySealCreateService.SetImageService` / `SetUploadBytes` / `SetBlurGenerate` | 注入图片服务、上传实现与模糊图开关 |
 | `CompanySealCreateService.RenderAttributePNG` | 按 `CustomSealAttribute` 输出 PNG |
 | `CompanySealCreateService.InitSealPermission` | 校验许可证是否已加载有效 |
 
-章面生成前在**服务层**统一做许可证与章型校验；生成器固定为 `CommonSealGenerator`，不可注入自定义实现。
+服务层负责许可证有效性校验（`InitSealPermission`）；章型权限与实际使用次数在绘制层（`internal/draw`）校验与统计。生成器固定为 `CommonSealGenerator`，不可注入自定义实现。
 
-`GetAutoSealImage` 需要 `ImageService`（转码 + 上传）。库默认装配 `service.DefaultImageService`，它实现转码部分，行为对齐 Java `ImageServiceImpl.toImageBytes`（透明化 → 缩放 → 旋转 → PNG 编码）；上传需自行接入存储，内嵌即可复用转码：
+`GetAutoSealImage` 需要 `ImageService`（转码 + 上传）。库默认装配 `service.DefaultImageService`，它实现转码部分，行为对齐 Java `ImageServiceImpl.toImageBytes`（透明化 → 缩放 → 旋转 → PNG 编码）；上传通过 `SetUploadBytes` 接入自有存储：
 
 ```go
-type myImageService struct{ service.DefaultImageService }
-
-func (myImageService) UploadBytes(data []byte, attr dto.ImageAttr, companySeal bool) (string, error) {
+svc := seal.NewCompanySealCreateService().SetFontPath(fontPath)
+svc.SetUploadBytes(func(data []byte, attr seal.ImageAttr, companySeal bool) (string, error) {
     return myStorage.Upload(data, "image/png"), nil
-}
-
-// 内嵌类型的方法都是指针接收者，赋值时须取地址
-svc := service.NewCompanySealCreateService().SetImageService(&myImageService{})
+})
+// 需要模糊章面时开启
+svc.SetBlurGenerate(true)
 ```
+
+也可自行实现 `seal.ImageService`。`SetUploadBytes` / `SetBlurGenerate` 来自可选接口 `seal.ImageServiceConfigurator`：实现方若未实现该接口，两者会被静默忽略，且 `HasUploadBytes` 恒为 false，`GetAutoSealImage` 会在渲染前返回 `ErrImageUploadNotConfigured`。
 
 `ImageAttr` 的 `Transparent`、`Zoom`、`Rotate`、`LimitWidth`、`LimitHeight`、`Degree` 由默认实现消费；显式 `SetImageService(nil)` 后这些字段不再生效。
 
 ### 集成约定
 
 - 请 **`import "github.com/bytodream/official-seal-open/seal"`**，类型使用本包导出的 `SealModel`、`CustomSealAttribute` 等；勿直接依赖 `seal/model`、`seal/internal`（`seal/utils` 为公开工具包）。
-- 前端创建印章 JSON 可经 **`ParseSealModelFromCreateJSON`** 转为 `SealModel` 后调用 `Preview`。
+- 前端创建印章 JSON 可直接反序列化为 `seal.SealModel`（字段与 JSON tag 见 `seal/service/dto`）后调用 `Preview`。
 - 服务层 `CustomSealAttribute` 经 JSON 转换进入内核，**不支持** `ToSealAttributeFunc` 回调；复杂映射请在业务侧组装好字段后再调用 API。
 - 服务构造改为无参 + 链式 `Set`：由 `NewCompanySealCreateService(base)` 改为 `NewCompanySealCreateService().SetFontPath(p).SetImageService(s)`；公共依赖类型 `ElectronicAbstractSealCreateService` 不再导出。
 
@@ -71,12 +72,11 @@ svc := service.NewCompanySealCreateService().SetImageService(&myImageService{})
 ```
 seal/                 对外门面（alias → service）
 ├── alias.go          门面别名：类型、错误、规格常量
-├── doc.go            包说明
 ├── cmd/              辅助命令（如效果图生成）
 ├── service/          服务与许可证
 │   └── dto/          集成方 DTO；ToDomain → 内核 model
 ├── model/            内核领域模型
-├── utils/            通用工具（像素换算、日志、许可证、IoC）
+├── utils/            通用工具（许可证与用量、日志、规格换算、加解密、IoC/集合/反射扩展）
 └── internal/         内部实现
     ├── draw/         章面绘制（base 公共层 + module 各章型，每章自包含）
     ├── render/       PNG 渲染与图像效果
@@ -152,7 +152,7 @@ seal/                 对外门面（alias → service）
 | 规格 | 含义 |
 |------|------|
 | `CIRCULAR_42` | 直径 42 mm 圆章（默认） |
-| `CIRCULAR_34` | 直径 34 mm 圆章 |
+| `CIRCULAR_34` | 直径 34 mm 圆章（仅企业圆章模块支持，未定义为导出常量） |
 | `CIRCULAR_50` | 直径 50 mm 圆章（多横排圆章常用） |
 | `OVAL_45_30` | 45×30 mm 椭圆 |
 | `OVAL_45_30_32_18` | 双行椭圆复合规格 |
@@ -210,7 +210,7 @@ CGO_ENABLED=0 go build -trimpath \
 | `-out` | 输出目录；批量模式缺省 `<仓库根>/docs/images/seals`，单章模式缺省当前目录 |
 | `-attr` | 自定义章面数据 JSON 文件；不传则渲染内置的 13 个样例 |
 | `-attr-text` / `-attrText` | 自定义章面数据 JSON 文本，与 `-attr` 二选一（命令行直接传参时更方便） |
-| `-name` | 单章模式的输出文件名（不含扩展名），缺省取 `-attr` 的文件名 |
+| `-name` | 单章模式的输出文件名（不含扩展名），缺省取 `-attr` 的文件名，`-attr-text` 时为 `seal` |
 | `-seed` | 随机种子，非 0 时防伪纹与模糊加粗结果可复现 |
 | `-license` / `-license-file` | 授权密钥内容 / 文件；也可用 `OS_LICENSE` 环境变量 |
 | `-font` | 字体路径，缺省回退 `fixture.fontPath`、`OFFICIAL_SEAL_FONTS_PATH` 或内嵌字体 |
@@ -251,7 +251,7 @@ CGO_ENABLED=0 go build -trimpath \
 ## 许可证与章型权限
 
 - 环境变量 **`OS_LICENSE`**：HybridSeal 载荷（启动时自动加载）；兼容别名 `OFFICIAL_SEAL_LICENSE`。
-- **Tier**：`community` / `individual` / `business` 对应不同默认可用章型；JSON 中 **`seal_categories`** 可显式限定列表。
+- **Tier**：`community` / `individual` / `business` 仅表示授权类型，不推导默认章型；可用章型完全由 JSON 字段 **`seal_categories`** 决定，未配置即无任何章型权限。
 - 未授权或章型不在许可范围内时，服务 API 返回 `ErrLicenseRequired` / `ErrSealCategoryNotLicensed` 等。
 
 ### 社区版许可证（开箱即用）

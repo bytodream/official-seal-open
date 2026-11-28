@@ -2,6 +2,9 @@
 package service
 
 import (
+	"image"
+	"reflect"
+
 	"github.com/bytodream/official-seal-open/seal/internal/draw"
 	"github.com/bytodream/official-seal-open/seal/internal/render"
 	"github.com/bytodream/official-seal-open/seal/model"
@@ -20,33 +23,49 @@ func NewCompanySealCreateService() *CompanySealCreateService {
 	}
 }
 
+// SetFontPath 设置章面绘制使用的字体文件路径。
 func (e *CompanySealCreateService) SetFontPath(fontPath string) *CompanySealCreateService {
 	e.FontPath = fontPath
 	return e
 }
 
+// SetImageService 注入章面图片服务；传 nil 表示不使用图片服务。
 func (e *CompanySealCreateService) SetImageService(imageService ImageService) *CompanySealCreateService {
 	e.ImageService = imageService
 	return e
 }
 
-// configurableImageService 返回可配置的图片服务：未注入时补默认实现，
-// 已注入但未实现 ImageServiceConfigurator 时返回 nil，因此配置项不会生效。
+// configurableImageService 返回实现了 ImageServiceConfigurator 的图片服务；
+// 未注入、未实现该接口或持有 nil 指针时返回 nil，调用方的配置会被忽略。
 func (e *CompanySealCreateService) configurableImageService() ImageServiceConfigurator {
-	if e.ImageService == nil {
-		e.ImageService = newDefaultImageService()
+	c, ok := e.ImageService.(ImageServiceConfigurator)
+	if !ok || isNilInterface(c) {
+		return nil
 	}
-	c, _ := e.ImageService.(ImageServiceConfigurator)
 	return c
 }
 
-func (e *CompanySealCreateService) SetToImageBytes(toImageBytes ToImageBytes) *CompanySealCreateService {
-	if c := e.configurableImageService(); c != nil {
-		c.SetToImageBytes(toImageBytes)
-	}
-	return e
+// hasImageService 判断是否注入了可用的图片服务（含类型化 nil 的防护）。
+func (e *CompanySealCreateService) hasImageService() bool {
+	return !isNilInterface(e.ImageService)
 }
 
+// isNilInterface 判断接口是否未赋值或持有 nil 指针（typed nil）。
+// reflect.ValueOf(nil) 是零值，直接调用 IsNil 会 panic，因此先判 v == nil。
+func isNilInterface(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan, reflect.Interface:
+		return rv.IsNil()
+	default:
+		return false
+	}
+}
+
+// SetUploadBytes 注入上传实现；图片服务未实现 ImageServiceConfigurator 时忽略。
 func (e *CompanySealCreateService) SetUploadBytes(uploadBytes UploadBytes) *CompanySealCreateService {
 	if c := e.configurableImageService(); c != nil {
 		c.SetUploadBytes(uploadBytes)
@@ -54,13 +73,31 @@ func (e *CompanySealCreateService) SetUploadBytes(uploadBytes UploadBytes) *Comp
 	return e
 }
 
-func (e *CompanySealCreateService) SetUploadRasterImage(uploadRasterImage UploadRasterImage) *CompanySealCreateService {
+// HasUploadBytes 报告上传能力是否就绪；GetAutoSealImage 依赖该结果在渲染前短路。
+func (e *CompanySealCreateService) HasUploadBytes() bool {
 	if c := e.configurableImageService(); c != nil {
-		c.SetUploadRasterImage(uploadRasterImage)
+		return c.HasUploadBytes()
+	}
+	return false
+}
+
+// SetBlurGenerate 开关模糊章面生成；图片服务未实现 ImageServiceConfigurator 时忽略。
+func (e *CompanySealCreateService) SetBlurGenerate(blurGenerate bool) *CompanySealCreateService {
+	if c := e.configurableImageService(); c != nil {
+		c.SetBlurGenerate(blurGenerate)
 	}
 	return e
 }
 
+// IsBlurGenerate 报告是否生成模糊章面。
+func (e *CompanySealCreateService) IsBlurGenerate() bool {
+	if c := e.configurableImageService(); c != nil {
+		return c.IsBlurGenerate()
+	}
+	return false
+}
+
+// SetWatermarkFunc 设置章面水印回调；当前生成/预览链路未使用该扩展点。
 func (e *CompanySealCreateService) SetWatermarkFunc(watermark WatermarkFunc) *CompanySealCreateService {
 	e.Watermark = watermark
 	return e
@@ -87,47 +124,83 @@ func (s *CompanySealCreateService) GetAutoSealImageByDefault() (*dto.SealImage, 
 
 // GetAutoSealImage 生成清晰/模糊章面并经 ImageService 上传，返回各 fileKey 与主图大小。
 func (s *CompanySealCreateService) GetAutoSealImage(seal *dto.Seal, attribute *dto.CustomSealAttribute) (*dto.SealImage, error) {
-	if seal == nil {
+	if seal == nil || attribute == nil {
 		return nil, dto.ErrSealAttributeNotConfigured
 	}
-	if s.ImageService == nil {
+	if !s.hasImageService() {
 		return nil, dto.ErrImageServiceNotConfigured
 	}
-	domainSeal, err := seal.ToDomain()
+	if !s.HasUploadBytes() {
+		return nil, dto.ErrImageUploadNotConfigured
+	}
+	imageBytes, blurImageBytes, err := s.GetSealImage(seal, attribute)
 	if err != nil {
 		return nil, err
 	}
-	domainAttr, err := domainAttributeFromService(attribute)
-	if err != nil {
-		return nil, err
-	}
-	normalImage, err := s.generateImage(domainSeal, domainAttr)
-	if err != nil {
-		return nil, domainErr(err)
-	}
+	var (
+		imageKey     string
+		blurImageKey string
+	)
 	attr := dto.ImageAttrDefault
-	normalImageBytes, err := s.ImageService.ToImageBytes(dto.FromDomainRaster(normalImage), attr)
-	if err != nil {
-		return nil, err
+	if len(imageBytes) > 0 {
+		imageKey, err = s.ImageService.UploadBytes(imageBytes, attr, true)
+		if err != nil {
+			return nil, err
+		}
 	}
-	imageKey, err := s.ImageService.UploadBytes(normalImageBytes, attr, true)
-	if err != nil {
-		return nil, err
+
+	if len(blurImageBytes) > 0 {
+		blurImageKey, err = s.ImageService.UploadBytes(blurImageBytes, attr, true)
+		if err != nil {
+			return nil, err
+		}
 	}
-	blurImage := render.DefaultThickenImage(normalImage, domainSeal.Radius)
-	blurImageKey, err := s.ImageService.UploadRasterImage(dto.FromDomainRaster(blurImage), attr, true)
-	if err != nil {
-		return nil, err
-	}
+
 	out, err := dto.FromDomainSealImage(&model.SealImage{
 		ImageKey:     imageKey,
 		BlurImageKey: blurImageKey,
-		Size:         int64(len(normalImageBytes)),
+		Size:         int64(len(imageBytes)),
 	})
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+// GetSealImage 生成清晰章面 PNG；IsBlurGenerate 开启时同时返回模糊章面 PNG。两者都不上传。
+func (s *CompanySealCreateService) GetSealImage(seal *dto.Seal, attribute *dto.CustomSealAttribute) ([]byte, []byte, error) {
+	if seal == nil || attribute == nil {
+		return nil, nil, dto.ErrSealAttributeNotConfigured
+	}
+	if !s.hasImageService() {
+		return nil, nil, dto.ErrImageServiceNotConfigured
+	}
+	domainSeal, err := seal.ToDomain()
+	if err != nil {
+		return nil, nil, err
+	}
+	domainAttr, err := domainAttributeFromService(attribute)
+	if err != nil {
+		return nil, nil, err
+	}
+	img, err := s.generateImage(domainSeal, domainAttr)
+	if err != nil {
+		return nil, nil, domainErr(err)
+	}
+	attr := dto.ImageAttrDefault
+	imageBytes, err := s.ImageService.ToImageBytes(img, attr)
+	if err != nil {
+		return nil, nil, err
+	}
+	var blurImageBytes []byte
+	if s.IsBlurGenerate() {
+		blurImage := render.DefaultThickenImage(img, domainSeal.Radius)
+		blurImageBytes, err = s.ImageService.ToImageBytes(blurImage, attr)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return imageBytes, blurImageBytes, nil
 }
 
 // Preview 按请求模型生成预览 PNG；固定叠加「样章」标识且不消耗使用额度，
@@ -181,7 +254,7 @@ func (s *CompanySealCreateService) RenderAttributePNG(attr *dto.CustomSealAttrib
 	return data, nil
 }
 
-func (s *CompanySealCreateService) generateImage(seal *model.Seal, attribute *model.CustomSealAttribute) (model.RasterImage, error) {
+func (s *CompanySealCreateService) generateImage(seal *model.Seal, attribute *model.CustomSealAttribute) (image.Image, error) {
 	if attribute == nil {
 		return nil, model.ErrSealAttributeNotConfigured
 	}
@@ -190,7 +263,7 @@ func (s *CompanySealCreateService) generateImage(seal *model.Seal, attribute *mo
 
 // generatePreviewImage 生成预览样章：showWatermark 为 true 时由 Draw 在章面中心叠加「样章」标识，
 // watermarkText 为空则使用默认文字。
-func (s *CompanySealCreateService) generatePreviewImage(seal *model.Seal, attribute *model.CustomSealAttribute, showWatermark bool, watermarkText string) (model.RasterImage, error) {
+func (s *CompanySealCreateService) generatePreviewImage(seal *model.Seal, attribute *model.CustomSealAttribute, showWatermark bool, watermarkText string) (image.Image, error) {
 	if attribute == nil {
 		return nil, model.ErrSealAttributeNotConfigured
 	}

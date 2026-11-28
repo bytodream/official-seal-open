@@ -1,18 +1,17 @@
 package render
 
 import (
-	"github.com/bytodream/official-seal-open/seal/internal/draw/base"
-	"github.com/bytodream/official-seal-open/seal/model"
-
 	"image"
 	imagestd "image/draw"
+
+	"github.com/bytodream/official-seal-open/seal/internal/draw/base"
 )
 
 // maxSampleTries 单个像素拒绝采样的最大尝试次数，用于保证极端半径下也能终止。
 const maxSampleTries = 64
 
 // DefaultThickenImage 使用默认半径对章面做模糊加粗。
-func DefaultThickenImage(img model.RasterImage, radius *int) image.Image {
+func DefaultThickenImage(img image.Image, radius *int) image.Image {
 	r := 60
 	if radius != nil {
 		r = *radius
@@ -22,7 +21,7 @@ func DefaultThickenImage(img model.RasterImage, radius *int) image.Image {
 }
 
 // ThickenImage 按给定半径对章面做模糊加粗。
-func ThickenImage(src model.RasterImage, radius float64) image.Image {
+func ThickenImage(src image.Image, radius float64) image.Image {
 	bounds := src.Bounds()
 	dst := image.NewRGBA(bounds)
 	imagestd.Draw(dst, bounds, src, bounds.Min, imagestd.Src)

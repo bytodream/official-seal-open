@@ -330,13 +330,3 @@ func FromDomainSealModel(m *model.SealModel) (*SealModel, error) {
 		ElectronicModel: electronicModelFromDomain(m.ElectronicModel),
 	}, nil
 }
-
-// ToDomainRaster 章面位图（image.Image，无需拷贝）。
-func ToDomainRaster(img RasterImage) model.RasterImage {
-	return img
-}
-
-// FromDomainRaster 从内部位图转回服务视图类型。
-func FromDomainRaster(img model.RasterImage) RasterImage {
-	return img
-}

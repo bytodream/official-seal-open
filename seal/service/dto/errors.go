@@ -11,5 +11,5 @@ var ErrSealCategoryNotSupported = errors.New("获取印章属性规格失败: �
 // ErrImageServiceNotConfigured 章面图片服务未注入，无法上传生成的位图。
 var ErrImageServiceNotConfigured = errors.New("章面图片服务未配置")
 
-// ErrImageUploadNotConfigured DefaultImageService 只提供转码，上传需接入自有存储实现。
-var ErrImageUploadNotConfigured = errors.New("章面图片上传未配置：DefaultImageService 仅提供转码，请接入自有存储")
+// ErrImageUploadNotConfigured 章面图上传实现未配置：需通过 SetUploadBytes 或自定义 ImageService 接入自有存储。
+var ErrImageUploadNotConfigured = errors.New("章面图片上传未配置：请通过 SetUploadBytes 或自定义 ImageService 接入自有存储")
